@@ -686,6 +686,48 @@ const CodexModelListResponseSchema = z.object({
     .optional(),
 });
 
+const CODEX_KNOWN_REASONING_EFFORTS: CodexReasoningEffortEntry[] = [
+  { reasoningEffort: "minimal", description: "Fastest reasoning for straightforward tasks" },
+  { reasoningEffort: "low", description: "Light reasoning for quick tasks" },
+  { reasoningEffort: "medium", description: "Balanced reasoning for most tasks" },
+  { reasoningEffort: "high", description: "Deeper reasoning for complex tasks" },
+];
+
+const CODEX_KNOWN_MODEL_FALLBACKS: CodexModel[] = [
+  {
+    id: "gpt-5.5",
+    displayName: "GPT-5.5",
+    description: "OpenAI Codex model fallback used when Codex app-server discovery is stale.",
+    model: "gpt-5.5",
+    defaultReasoningEffort: "medium",
+    supportedReasoningEfforts: CODEX_KNOWN_REASONING_EFFORTS,
+  },
+  {
+    id: "gpt-5.4",
+    displayName: "GPT-5.4",
+    description: "OpenAI Codex model fallback used when Codex app-server discovery is stale.",
+    model: "gpt-5.4",
+    defaultReasoningEffort: "medium",
+    supportedReasoningEfforts: CODEX_KNOWN_REASONING_EFFORTS,
+  },
+  {
+    id: "gpt-5.4-mini",
+    displayName: "GPT-5.4 Mini",
+    description: "OpenAI Codex model fallback used when Codex app-server discovery is stale.",
+    model: "gpt-5.4-mini",
+    defaultReasoningEffort: "medium",
+    supportedReasoningEfforts: CODEX_KNOWN_REASONING_EFFORTS,
+  },
+];
+
+function appendKnownCodexModelFallbacks(models: CodexModel[]): CodexModel[] {
+  const existingModelIds = new Set(models.map((model) => model.id));
+  const missingFallbacks = CODEX_KNOWN_MODEL_FALLBACKS.filter(
+    (model) => !existingModelIds.has(model.id),
+  );
+  return missingFallbacks.length === 0 ? models : [...models, ...missingFallbacks];
+}
+
 class CodexAppServerClient {
   private readonly rl: readline.Interface;
   private readonly pending = new Map<number, PendingRequest>();
@@ -3595,21 +3637,11 @@ class CodexAppServerAgentSession implements AgentSession {
     }
 
     if (!model || !thinkingOptionId) {
-      const modelResponse = toObjectRecord(await this.client.request("model/list", {}));
-      const modelData = Array.isArray(modelResponse?.data) ? modelResponse.data : [];
-      const models = modelData
-        .map((m) => {
-          const record = toObjectRecord(m);
-          return {
-            id: typeof record?.id === "string" ? record.id : "",
-            isDefault: !!record?.isDefault,
-            defaultReasoningEffort:
-              typeof record?.defaultReasoningEffort === "string"
-                ? record.defaultReasoningEffort
-                : undefined,
-          };
-        })
-        .filter((m) => m.id);
+      const modelResponse = await this.client.request("model/list", {});
+      const parsedResponse = CodexModelListResponseSchema.safeParse(modelResponse);
+      const models = appendKnownCodexModelFallbacks(
+        parsedResponse.success ? (parsedResponse.data.data ?? []) : [],
+      );
       const defaultModel = models.find((m) => m.isDefault) ?? models[0];
       if (!defaultModel) {
         throw new Error("No models available from Codex app-server");
@@ -4785,7 +4817,9 @@ export class CodexAppServerAgentClient implements AgentClient {
 
       const rawResponse = await client.request("model/list", {});
       const parsedResponse = CodexModelListResponseSchema.safeParse(rawResponse);
-      const models = parsedResponse.success ? (parsedResponse.data.data ?? []) : [];
+      const models = appendKnownCodexModelFallbacks(
+        parsedResponse.success ? (parsedResponse.data.data ?? []) : [],
+      );
       const configuredDefaults = await readCodexConfiguredDefaults(client, this.logger);
       const configuredDefaultModelId = configuredDefaults.model;
       const configuredDefaultThinkingOptionId = configuredDefaults.thinkingOptionId;
@@ -4967,6 +5001,7 @@ export const __codexAppServerInternals = {
   listCodexSkills,
   normalizeCodexOutputSchema,
   normalizeCodexQuestionPrompts,
+  appendKnownCodexModelFallbacks,
   toAgentUsage,
   threadItemToTimeline,
 };

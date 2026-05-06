@@ -169,6 +169,39 @@ describe("Codex app-server provider", () => {
     }
   });
 
+  test("appends current Codex model fallbacks when app-server discovery lags", () => {
+    const models = __codexAppServerInternals.appendKnownCodexModelFallbacks([
+      {
+        id: "gpt-5.3-codex",
+        displayName: "GPT-5.3 Codex",
+        isDefault: true,
+      },
+      {
+        id: "gpt-5.4",
+        displayName: "Runtime GPT-5.4",
+        defaultReasoningEffort: "high",
+      },
+    ]);
+
+    expect(models.map((model) => model.id)).toEqual([
+      "gpt-5.3-codex",
+      "gpt-5.4",
+      "gpt-5.5",
+      "gpt-5.4-mini",
+    ]);
+    expect(models.find((model) => model.id === "gpt-5.4")?.displayName).toBe("Runtime GPT-5.4");
+    expect(models.find((model) => model.id === "gpt-5.5")).toMatchObject({
+      displayName: "GPT-5.5",
+      defaultReasoningEffort: "medium",
+      supportedReasoningEfforts: [
+        { reasoningEffort: "minimal" },
+        { reasoningEffort: "low" },
+        { reasoningEffort: "medium" },
+        { reasoningEffort: "high" },
+      ],
+    });
+  });
+
   test("lists repo skills using WorkspaceGitService repo-root resolution", async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), "codex-skills-"));
     const cwd = path.join(tempDir, "repo", "packages", "app");

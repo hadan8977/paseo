@@ -68,6 +68,13 @@ paseo
 
 This shows a QR code in the terminal. Connect from any client. This path is useful for servers and remote machines.
 
+### Remote access from Android and web
+
+Run the daemon on the Windows PC or Linux server you want to control, then point the
+Android app or web client at that daemon host. The Codex provider in this branch also
+backfills `gpt-5.5`, `gpt-5.4`, and `gpt-5.4-mini` when Codex model discovery lags,
+so those model choices stay visible on both clients once the daemon is updated.
+
 For full setup and configuration, see:
 
 - [Docs](https://paseo.sh/docs)
